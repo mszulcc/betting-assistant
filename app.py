@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 
-# Set page config
+# 1. Ustawienia konfiguracji strony (musi być jako pierwsze)
 st.set_page_config(
     page_title="BetAssist AI",
     page_icon="⚽",
@@ -9,7 +9,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load custom CSS
+# 2. Ładowanie niestandardowych stylów CSS
 def load_css():
     css_path = os.path.join(os.path.dirname(__file__), "assets", "style.css")
     if os.path.exists(css_path):
@@ -18,24 +18,35 @@ def load_css():
 
 load_css()
 
-# Import components and modules
+# 3. Import komponentów i modułów wewnętrznych
 from components.sidebar import render_sidebar
 from components.chat import render_chat
 from components.match_card import render_match_card
 from modules.knowledge_base import init_db, get_all_strategies, get_all_terms
 from modules.football_api import get_upcoming_matches, get_standings, AVAILABLE_LEAGUES
 
-# Initialize Database on first run
+# Inicjalizacja bazy danych przy pierwszym uruchomieniu
 init_db()
 
-# Render Sidebar
+# Renderowanie paska bocznego
 render_sidebar()
 
-# Main Tabs
-tab_chat, tab_matches, tab_standings, tab_kb = st.tabs(["💬 Chat", "⚽ Upcoming Matches", "📊 Standings", "📚 Knowledge Base"])
+# 4. Definicja zakładek interfejsu
+tab_chat, tab_matches, tab_standings, tab_kb = st.tabs([
+    "💬 Chat", 
+    "⚽ Upcoming Matches", 
+    "📊 Standings", 
+    "📚 Knowledge Base"
+])
 
+# 5. Przechwytywanie inputu użytkownika na samym dole struktury kodu (Globalnie)
+# Dzięki temu pole tekstowe jest na stałe zakotwiczone na dole ekranu.
+prompt = st.chat_input("E.g., What is Asian Handicap? or How is Liverpool's form?")
+
+# 6. Renderowanie zawartości poszczególnych zakładek
 with tab_chat:
-    render_chat()
+    # Przekazujemy przechwycony prompt bezpośrednio do komponentu czatu
+    render_chat(prompt)
 
 with tab_matches:
     st.header("⚽ Upcoming Matches")
@@ -56,9 +67,9 @@ with tab_matches:
         if not matches:
             st.info("No upcoming matches found for the selected criteria.")
         else:
-            # Display in a grid
+            # Wyświetlanie meczów w siatce dwukolumnowej
             cols = st.columns(2)
-            for i, match in enumerate(matches[:20]): # Limit to 20 to prevent overload
+            for i, match in enumerate(matches[:20]): # Limit do 20 meczów, aby uniknąć przeciążenia interfejsu
                 with cols[i % 2]:
                     render_match_card(match)
 
@@ -91,7 +102,7 @@ with tab_standings:
                         "goals_against": st.column_config.NumberColumn("GA"),
                         "goal_diff": st.column_config.NumberColumn("GD"),
                         "points": st.column_config.NumberColumn("Pts"),
-                        "league": None # hide
+                        "league": None # ukryj kolumnę z nazwą ligi
                     },
                     hide_index=True,
                     use_container_width=True
@@ -117,7 +128,6 @@ with tab_kb:
     with kb_tab2:
         st.subheader("Glossary of Terms")
         terms = get_all_terms()
-        # Group by category (basic grouping)
         for t in terms:
             st.markdown(f"**{t['term']}**")
             st.markdown(f"- {t['definition']}")

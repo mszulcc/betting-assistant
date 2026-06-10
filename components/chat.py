@@ -2,7 +2,7 @@ import streamlit as st
 from modules.llm import get_chat_stream
 from modules.query_router import get_context_for_query
 
-def render_chat():
+def render_chat(prompt=None):  # Dodajemy parametr prompt
     """Renders the main chat interface."""
     st.header("💬 Chat with BetAssist AI")
     st.markdown("Ask me about betting strategies, team form, upcoming matches, or terminology.")
@@ -22,8 +22,8 @@ def render_chat():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # React to user input
-    if prompt := st.chat_input("E.g., What is Asian Handicap? or How is Liverpool's form?"):
+    # React to user input (przeniesione logicznie, reaguje na przekazany prompt)
+    if prompt:
         # Display user message in chat message container
         st.chat_message("user").markdown(prompt)
         # Add user message to chat history
@@ -32,9 +32,8 @@ def render_chat():
         # Process the query
         with st.spinner("Analyzing data..."):
             try:
-                # 1. Route query to get context (Temporarily disabled)
-                # kb_context, api_context = get_context_for_query(prompt)
-                kb_context, api_context = "", ""
+                # 1. Route query to get context from KB and live API
+                kb_context, api_context = get_context_for_query(prompt)
             except Exception as e:
                 kb_context, api_context = "", ""
                 st.error(f"Context retrieval error: {e}")
@@ -45,7 +44,7 @@ def render_chat():
                 # 2. Get LLM stream
                 stream = get_chat_stream(
                     user_message=prompt,
-                    chat_history=st.session_state.messages[:-1], # Exclude the current message we just added
+                    chat_history=st.session_state.messages[:-1], # Exclude the current message
                     kb_context=kb_context,
                     api_context=api_context
                 )
@@ -54,7 +53,7 @@ def render_chat():
                 response = f"⚠️ An error occurred while generating your response: {str(e)}"
                 st.markdown(response)
             
-            # Show expanding box with the retrieved context (for transparency/debugging)
+            # Show expanding box with the retrieved context
             with st.expander("🔍 View Retrieved Context"):
                 st.markdown("### Knowledge Base Context")
                 st.text(kb_context if kb_context else "None")
@@ -63,3 +62,6 @@ def render_chat():
 
         # Add assistant response to chat history
         st.session_state.messages.append({"role": "assistant", "content": response})
+        
+        # Rerun, aby odświeżyć stan czatu i wyczyścić input box
+        st.rerun()
