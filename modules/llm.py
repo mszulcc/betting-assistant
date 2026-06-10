@@ -29,10 +29,10 @@ def build_system_prompt(kb_context: str = "", api_context: str = "") -> str:
 
 
 def get_chat_stream(
-    user_message: str,
-    chat_history: list[dict],
-    kb_context: str = "",
-    api_context: str = "",
+        user_message: str,
+        chat_history: list[dict],
+        kb_context: str = "",
+        api_context: str = "",
 ):
     """
     Get a response from the LLM with knowledge base and API context injected.
@@ -43,7 +43,7 @@ def get_chat_stream(
         yield _fallback_response(kb_context, api_context)
         return
 
-    # 1. NAPRAWIONE: Odkomentowano i zbudowano poprawny system prompt
+    # 1. Odkomentowano i zbudowano poprawny system prompt
     system_prompt = build_system_prompt(kb_context, api_context)
     messages = [SystemMessage(content=system_prompt)]
 
@@ -58,14 +58,24 @@ def get_chat_stream(
     messages.append(HumanMessage(content=user_message))
 
     try:
-            # Zamiast llm.stream, użyj invoke dla testu:
-            res = llm.invoke(messages)
-            if res.content:
-                yield str(res.content)
+        # Używamy streamowania dla lepszego UX w Streamlit
+        for chunk in llm.stream(messages):
+            if isinstance(chunk.content, str):
+                yield chunk.content
+            elif isinstance(chunk.content, list):
+                # Płynne wyciąganie tekstu z porcji (chunków)
+                text_parts = [
+                    block.get("text", "")
+                    for block in chunk.content
+                    if isinstance(block, dict) and block.get("type") == "text"
+                ]
+                yield "".join(text_parts)
+
     except Exception as e:
         error_msg = str(e)
         if "quota" in error_msg.lower() or "rate" in error_msg.lower():
-            yield "⚠️ **API rate limit reached.** Please wait a moment and try again.\n\n" + _fallback_response(kb_context, api_context)
+            yield "⚠️ **API rate limit reached.** Please wait a moment and try again.\n\n" + _fallback_response(
+                kb_context, api_context)
         else:
             yield f"⚠️ **Error communicating with the AI model:** {error_msg}\n\nHere's what I found in the knowledge base:\n\n{_fallback_response(kb_context, api_context)}"
 
