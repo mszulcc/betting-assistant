@@ -1,0 +1,60 @@
+/* assets/style.css */
+
+/* Hide main menu and footer */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+
+/* Custom Match Card styling */
+.match-card {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.match-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-color: #475569;
+}
+
+/* Chat container tweaks */
+.stChatMessage {
+    background-color: transparent !important;
+}
+
+/* Button styling */
+.stButton>button {
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+/* Risk Badges */
+.risk-low {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.risk-medium {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.risk-high {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}

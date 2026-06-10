@@ -1,0 +1,93 @@
+from test_llm2 import llm
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import GOOGLE_API_KEY, LLM_MODEL, LLM_TEMPERATURE, SYSTEM_PROMPT
+
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+
+def get_llm():
+    """Create and return a Gemini LLM instance via LangChain."""
+    if not GOOGLE_API_KEY:
+        return None
+
+    return ChatGoogleGenerativeAI(
+        model=LLM_MODEL,
+        google_api_key=GOOGLE_API_KEY,
+        temperature=LLM_TEMPERATURE,
+        max_retries=0,  # fail fast!
+        client_options={"transport": "rest"}
+    )
+
+
+def build_system_prompt(kb_context: str = "", api_context: str = "") -> str:
+    """Build the full system prompt with injected knowledge base and API context."""
+    return SYSTEM_PROMPT.format(
+        kb_context=kb_context if kb_context else "No specific knowledge base data retrieved for this query.",
+        api_context=api_context if api_context else "No live API data retrieved for this query.",
+    )
+
+
+def get_chat_stream(
+    user_message: str,
+    chat_history: list[dict],
+    kb_context: str = "",
+    api_context: str = "",
+):
+    """
+    Get a response from the LLM with knowledge base and API context injected.
+    Returns a generator yielding strings (text chunks).
+    """
+    llm = get_llm()
+    if not llm:
+        yield _fallback_response(kb_context, api_context)
+        return
+
+    # 1. NAPRAWIONE: Odkomentowano i zbudowano poprawny system prompt
+    system_prompt = build_system_prompt(kb_context, api_context)
+    messages = [SystemMessage(content=system_prompt)]
+
+    # 2. Dodanie historii czatu (ostatnie 20 wiadomości)
+    for msg in chat_history[-20:]:
+        if msg["role"] == "user":
+            messages.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            messages.append(AIMessage(content=msg["content"]))
+
+    # 3. Dodanie aktualnej wiadomości użytkownika
+    messages.append(HumanMessage(content=user_message))
+
+    try:
+            # Zamiast llm.stream, użyj invoke dla testu:
+            res = llm.invoke(messages)
+            if res.content:
+                yield str(res.content)
+    except Exception as e:
+        error_msg = str(e)
+        if "quota" in error_msg.lower() or "rate" in error_msg.lower():
+            yield "⚠️ **API rate limit reached.** Please wait a moment and try again.\n\n" + _fallback_response(kb_context, api_context)
+        else:
+            yield f"⚠️ **Error communicating with the AI model:** {error_msg}\n\nHere's what I found in the knowledge base:\n\n{_fallback_response(kb_context, api_context)}"
+
+
+def _fallback_response(kb_context: str, api_context: str) -> str:
+    """Generate a basic response from KB/API data when LLM is unavailable."""
+    parts = []
+
+    if kb_context and kb_context != "No specific knowledge base data retrieved for this query.":
+        parts.append("📚 **From Knowledge Base:**\n" + kb_context)
+
+    if api_context and api_context != "No live API data retrieved for this query.":
+        parts.append("⚽ **From Live Data:**\n" + api_context)
+
+    if not parts:
+        return "I'm currently unable to access the AI model. Please check your API key configuration in the sidebar."
+
+    return "\n\n---\n\n".join(parts)
+
+
+def is_llm_configured() -> bool:
+    """Check if the Gemini API key is configured."""
+    return bool(GOOGLE_API_KEY and GOOGLE_API_KEY != "your_gemini_api_key_here")
