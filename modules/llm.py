@@ -1,4 +1,3 @@
-from test_llm2 import llm
 import os
 import sys
 
@@ -18,7 +17,6 @@ def get_llm():
         google_api_key=GOOGLE_API_KEY,
         temperature=LLM_TEMPERATURE,
         max_retries=0,  # fail fast!
-        client_options={"transport": "rest"}
     )
 
 
