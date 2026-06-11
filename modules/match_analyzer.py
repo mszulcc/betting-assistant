@@ -22,7 +22,6 @@ def analyze_match(home_team: str, away_team: str, match_id: int = None) -> dict:
     Returns:
         dict containing structured analysis data
     """
-    return {"status": "Analyzer temporarily disabled."}
     
     analysis = {
         "home_team": home_team,

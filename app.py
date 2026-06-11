@@ -25,14 +25,16 @@ from components.match_card import render_match_card
 from modules.knowledge_base import init_db, get_all_strategies, get_all_terms
 from modules.football_api import get_upcoming_matches, get_standings, AVAILABLE_LEAGUES
 
-# Inicjalizacja bazy danych przy pierwszym uruchomieniu
-init_db()
-
-# Seed KB with starter data if empty (runs only once)
-from modules.seed_data import seed_knowledge_base, is_seeded
-if not is_seeded():
-    seed_knowledge_base()
-
+# Optymalizacja inicjalizacji: Wykonaj tylko raz na sesję użytkownika
+if "db_initialized" not in st.session_state:
+    init_db()
+    
+    # Seed KB z początkowymi danymi, jeśli baza jest pusta
+    from modules.seed_data import seed_knowledge_base, is_seeded
+    if not is_seeded():
+        seed_knowledge_base()
+        
+    st.session_state["db_initialized"] = True
 
 # Renderowanie paska bocznego
 render_sidebar()
@@ -46,7 +48,6 @@ tab_chat, tab_matches, tab_standings, tab_kb = st.tabs([
 ])
 
 # 5. Przechwytywanie inputu użytkownika na samym dole struktury kodu (Globalnie)
-# Dzięki temu pole tekstowe jest na stałe zakotwiczone na dole ekranu.
 prompt = st.chat_input("E.g., What is Asian Handicap? or How is Liverpool's form?")
 
 # 6. Renderowanie zawartości poszczególnych zakładek
