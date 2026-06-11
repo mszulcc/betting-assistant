@@ -36,7 +36,7 @@ AVAILABLE_LEAGUES = {
 }
 
 # --- LLM Configuration ---
-LLM_MODEL = "gemini-3.1-flash-lite"
+LLM_MODEL = "gemini-3.5-flash"
 LLM_TEMPERATURE = 0.4
 
 SYSTEM_PROMPT = """You are BetAssist AI — an intelligent football match analysis and betting assistant.

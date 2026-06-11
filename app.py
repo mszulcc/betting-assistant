@@ -28,6 +28,12 @@ from modules.football_api import get_upcoming_matches, get_standings, AVAILABLE_
 # Inicjalizacja bazy danych przy pierwszym uruchomieniu
 init_db()
 
+# Seed KB with starter data if empty (runs only once)
+from modules.seed_data import seed_knowledge_base, is_seeded
+if not is_seeded():
+    seed_knowledge_base()
+
+
 # Renderowanie paska bocznego
 render_sidebar()
 
@@ -113,9 +119,9 @@ with tab_standings:
 with tab_kb:
     st.header("📚 Browse Knowledge Base")
     st.write("This is the custom domain knowledge injected into the AI.")
-    
-    kb_tab1, kb_tab2 = st.tabs(["Strategies", "Terminology"])
-    
+
+    kb_tab1, kb_tab2, kb_tab3 = st.tabs(["Strategies", "Terminology", "📋 My Rules"])
+
     with kb_tab1:
         st.subheader("Betting Strategies")
         strategies = get_all_strategies()
@@ -124,7 +130,7 @@ with tab_kb:
                 st.markdown(f"**Category:** {s['category']}")
                 st.markdown(f"**Description:** {s['description']}")
                 st.markdown(f"**Example:** _{s['example']}_")
-                
+
     with kb_tab2:
         st.subheader("Glossary of Terms")
         terms = get_all_terms()
@@ -133,3 +139,36 @@ with tab_kb:
             st.markdown(f"- {t['definition']}")
             st.markdown(f"- *Example: {t['example_usage']}*")
             st.markdown("---")
+
+    with kb_tab3:
+        from modules.rules_loader import list_rule_files, get_rules_dir, has_rules, invalidate_cache
+
+        st.subheader("📋 My Betting Rules")
+        st.info(
+            f"Drop your **Markdown (.md)** files into:\n\n"
+            f"`{get_rules_dir()}`\n\n"
+            "Files are picked up automatically within 60 seconds. "
+            "You can have multiple files — they are loaded in alphabetical order."
+        )
+
+        col_reload, _ = st.columns([1, 4])
+        with col_reload:
+            if st.button("🔄 Reload Rules Now"):
+                invalidate_cache()
+                st.success("Rules cache cleared — files will be re-read on next message.")
+
+        rule_files = list_rule_files()
+
+        if not rule_files:
+            st.warning(
+                "No rule files found yet. Add a `.md` file to the rules folder shown above."
+            )
+        else:
+            st.success(f"{len(rule_files)} rule file(s) loaded and active in every AI response.")
+            for rf in rule_files:
+                with st.expander(f"📄 {rf['filename']}  —  {rf['size_kb']} KB  |  Modified: {rf['modified']}"):
+                    try:
+                        with open(rf["path"], encoding="utf-8") as f:
+                            st.markdown(f.read())
+                    except Exception as e:
+                        st.error(f"Could not read file: {e}")

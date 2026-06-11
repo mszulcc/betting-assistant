@@ -1,0 +1,8 @@
+# Ignorowanie środowiska wirtualnego w katalogu głównym
+venv/
+.venv/
+
+# Ignorowanie wszystkich folderów __pycache__ (w tym modules/__pycache__/)
+**/__pycache__/
+*.py[cod]
+*$py.class

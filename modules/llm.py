@@ -3,6 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from config import GOOGLE_API_KEY, LLM_MODEL, LLM_TEMPERATURE, SYSTEM_PROMPT
+from modules.rules_loader import get_rules
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
@@ -21,11 +22,24 @@ def get_llm():
 
 
 def build_system_prompt(kb_context: str = "", api_context: str = "") -> str:
-    """Build the full system prompt with injected knowledge base and API context."""
-    return SYSTEM_PROMPT.format(
+    """Build the full system prompt with injected knowledge base, API context, and custom rules."""
+    base = SYSTEM_PROMPT.format(
         kb_context=kb_context if kb_context else "No specific knowledge base data retrieved for this query.",
         api_context=api_context if api_context else "No live API data retrieved for this query.",
     )
+
+    # Inject custom user rules from data/rules/*.md (if any files exist)
+    rules = get_rules()
+    if rules:
+        rules_block = (
+            "\n\n---\n"
+            "CUSTOM USER BETTING RULES (highest priority — always follow these):\n"
+            f"{rules}\n"
+            "---"
+        )
+        return base + rules_block
+
+    return base
 
 
 def get_chat_stream(

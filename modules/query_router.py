@@ -14,6 +14,69 @@ import modules.knowledge_base as kb
 import modules.football_api as api
 import modules.web_search as ws
 import modules.odds_api as odds_api
+import modules.elo_ratings as elo_ratings
+
+# ---------------------------------------------------------------------------
+# Intent classification
+# ---------------------------------------------------------------------------
+
+# Intent types returned by the LLM classifier
+# MATCH   — user asks about a specific match, form, prediction, analysis
+# ODDS    — user asks about betting odds, value bets, tips
+# TERM    — user asks what something means, strategy explanations
+# TABLE   — user asks about league tables, standings, rankings
+# GENERAL — anything else (greetings, off-topic, etc.)
+INTENT_TYPES = {"MATCH", "ODDS", "TERM", "TABLE", "GENERAL"}
+
+_CLASSIFIER_SYSTEM = """You are an intent classifier for a football betting assistant.
+Classify the user message into EXACTLY ONE of these categories:
+  MATCH  — asks about a specific match, team form, head-to-head, prediction, analysis, injuries, lineups
+  ODDS   — asks about betting odds, value bets, tips, best bet, should I bet
+  TERM   — asks what a term means, how a strategy works, glossary, education
+  TABLE  — asks about league standings, rankings, points table, top scorers
+  GENERAL — anything else: greetings, off-topic, vague questions
+
+Reply with ONLY one word from the list above. No punctuation, no explanation."""
+
+
+def classify_intent(query: str) -> str:
+    """
+    Use a lightweight Gemini call to classify the query intent.
+    Returns one of: MATCH | ODDS | TERM | TABLE | GENERAL.
+    Falls back to keyword heuristic on error (no extra latency impact).
+    """
+    try:
+        from modules.llm import get_llm
+        llm = get_llm()
+        if not llm:
+            return _classify_heuristic(query)
+        from langchain_core.messages import SystemMessage, HumanMessage
+        response = llm.invoke(
+            [SystemMessage(content=_CLASSIFIER_SYSTEM),
+             HumanMessage(content=query[:400])],  # trim to save tokens
+        )
+        result = response.content.strip().upper().split()[0] if response.content else ""
+        return result if result in INTENT_TYPES else _classify_heuristic(query)
+    except Exception:
+        return _classify_heuristic(query)
+
+
+def _classify_heuristic(query: str) -> str:
+    """Fast keyword-based fallback classifier (no network needed)."""
+    q = query.lower()
+    if any(w in q for w in ["standing", "table", "rank", "position", "points", "leader"]):
+        return "TABLE"
+    if any(w in q for w in ["what is", "explain", "meaning", "definition", "how does", "strategy", "strategies",
+                             "handicap", "asian", "over", "under", "btts", "accumulator", "parlay", "kelly",
+                             "bankroll", "ev", "roi", "arbitrage", "matched betting"]):
+        return "TERM"
+    if any(w in q for w in ["odds", "kurs", "value bet", "tip", "should i bet", "best bet", "typowanie"]):
+        return "ODDS"
+    if any(w in q for w in ["match", "game", "predict", "analysis", "form", "h2h", "head to head",
+                             "injury", "lineup", "squad", "vs", "versus", "upcoming", "fixture",
+                             "prognoz", "analiz", "preview"]):
+        return "MATCH"
+    return "GENERAL"
 
 # Common betting terms to help routing
 BETTING_TERMS_KEYWORDS = ["handicap", "asian", "over", "under", "btts", "value", "arbitrage", "stake", "bankroll", "accumulator", "parlay", "odds", "ev", "roi", "strategy", "strategies", "tip", "tips", "meaning", "what is"]
@@ -39,7 +102,12 @@ NATIONAL_TEAMS = [
 def analyze_query(query: str) -> dict:
     """Analyze the user's query to determine what data sources are needed."""
     query_lower = query.lower()
+
+    # --- LLM-based intent classification (fast single-token call) ---
+    intent_type = classify_intent(query)
+
     intent = {
+        "intent_type": intent_type,
         "needs_kb_terms": False,
         "needs_kb_team_notes": False,
         "needs_kb_league_insights": False,
@@ -51,37 +119,38 @@ def analyze_query(query: str) -> dict:
         "league_mentions": [],
     }
 
-    # 1. Check for terms & strategies
-    if any(keyword in query_lower for keyword in BETTING_TERMS_KEYWORDS):
+    # 1. Terms & strategies — only for TERM and ODDS intents
+    if intent_type in ("TERM", "ODDS") or any(keyword in query_lower for keyword in BETTING_TERMS_KEYWORDS):
         intent["needs_kb_terms"] = True
         intent["needs_kb_strategies"] = True
 
-    # 2. Check for league mentions
+    # 2. League mentions (always check)
     for league_key, league_info in AVAILABLE_LEAGUES.items():
         if league_info["name"].lower() in query_lower or league_key.lower() in query_lower:
             intent["league_mentions"].append(league_info["code"])
             intent["needs_kb_league_insights"] = True
 
-    # 3. Check for typical API intents
-    if any(word in query_lower for word in ["match", "matches", "game", "games", "play", "playing", "weekend", "today", "tomorrow", "upcoming", "fixture", "analysis", "predict", "prediction", "bet", "betting"]):
+    # 3. API intents — only for MATCH, ODDS, TABLE (not TERM or GENERAL)
+    if intent_type in ("MATCH", "ODDS") or any(word in query_lower for word in
+            ["match", "matches", "game", "games", "play", "playing", "weekend",
+             "today", "tomorrow", "upcoming", "fixture", "analysis",
+             "predict", "prediction", "bet", "betting"]):
         intent["needs_api_upcoming_matches"] = True
 
-    if any(word in query_lower for word in ["table", "standings", "rank", "position", "leader", "points"]):
+    if intent_type == "TABLE" or any(word in query_lower for word in
+            ["table", "standings", "rank", "position", "leader", "points"]):
         intent["needs_api_standings"] = True
-        if intent["league_mentions"]:
-            intent["needs_api_standings"] = True
 
-    # 4. Detect World Cup context
+    # 4. World Cup context
     if any(kw in query_lower for kw in WC_KEYWORDS):
         if 2000 not in intent["league_mentions"]:
-            intent["league_mentions"].append(2000)  # WC code
+            intent["league_mentions"].append(2000)
         intent["needs_api_upcoming_matches"] = True
 
-    # 5. Detect national team mentions directly from query text
+    # 5. National team detection
     mentioned_national_teams = [t for t in NATIONAL_TEAMS if t in query_lower]
     intent["mentioned_national_teams"] = mentioned_national_teams
     if mentioned_national_teams:
-        # If national teams are mentioned, assume World Cup context and fetch WC fixtures
         if 2000 not in intent["league_mentions"]:
             intent["league_mentions"].append(2000)
         intent["needs_api_upcoming_matches"] = True
@@ -89,21 +158,27 @@ def analyze_query(query: str) -> dict:
     else:
         intent["needs_api_recent_matches"] = False
 
-    # 6. Determine if web search is needed
-    # Trigger on: match analysis, injuries, odds, lineups, team news, or any team mention
+    # 6. Web search — only for MATCH and ODDS intents
     intent["needs_web_search"] = bool(
-        mentioned_national_teams
-        or any(w in query_lower for w in [
-            "injur", "lineup", "squad", "suspend", "absent", "miss",
-            "odds", "kurs", "typowanie", "prognoz", "analiz", "preview",
-            "predict", "news", "form", "head to head", "h2h",
-        ])
-        or intent["needs_api_upcoming_matches"]
+        intent_type in ("MATCH", "ODDS")
+        and (
+            mentioned_national_teams
+            or any(w in query_lower for w in [
+                "injur", "lineup", "squad", "suspend", "absent", "miss",
+                "odds", "kurs", "typowanie", "prognoz", "analiz", "preview",
+                "predict", "news", "form", "head to head", "h2h",
+            ])
+            or intent["needs_api_upcoming_matches"]
+        )
     )
 
-    # 7. Naive team extraction for club teams via KB
-    intent["needs_kb_team_notes"] = True
-    intent["needs_api_team_search"] = True
+    # 7. Club team notes — only for MATCH and ODDS intents (was always True — bug fixed)
+    if intent_type in ("MATCH", "ODDS"):
+        intent["needs_kb_team_notes"] = True
+        intent["needs_api_team_search"] = True
+    else:
+        intent["needs_kb_team_notes"] = False
+        intent["needs_api_team_search"] = False
 
     return intent
 
@@ -279,6 +354,24 @@ def get_context_for_query(query: str) -> tuple[str, str]:
                         )
                 if len(overview) > 1:
                     api_parts.append("\n".join(overview))
+
+    # --- ELO Ratings (eloratings.net) ---
+    # Build a unified list of team names to look up: national teams from query
+    # + any club teams resolved via Knowledge Base.
+    teams_to_lookup = []
+
+    national_teams_detected = intent.get("mentioned_national_teams", [])
+    if national_teams_detected:
+        teams_to_lookup.extend([t.title() for t in national_teams_detected])
+
+    # Also add club teams found via KB (found_teams may be empty for national-only queries)
+    for club in found_teams:
+        teams_to_lookup.append(club)
+
+    if teams_to_lookup:
+        elo_str = elo_ratings.format_elo_for_llm(teams_to_lookup)
+        if elo_str:
+            api_parts.append(elo_str)
 
     # Format output
     kb_context = "\n\n".join(kb_parts) if kb_parts else ""
