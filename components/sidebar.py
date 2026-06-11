@@ -40,9 +40,13 @@ def render_sidebar():
             st.warning("Database not initialized yet.")
             
         st.markdown("---")
-        
+
         if st.button("🗑️ Clear Chat History", use_container_width=True):
-            st.session_state.messages = []
+            # Zamiast pustej listy, przywracamy domyślne powitanie
+            st.session_state.messages = [{
+                "role": "assistant",
+                "content": "Hello! I'm BetAssist AI. I can help you analyze matches, explain betting strategies, or look up team stats. What would you like to know?"
+            }]
             st.rerun()
             
         st.markdown("---")
