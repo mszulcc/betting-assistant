@@ -1,9 +1,26 @@
 import streamlit as st
 from datetime import datetime
 
+
+def trigger_analysis_callback(match: dict):
+    """Callback to switch tab, inject prompt, and trigger generation."""
+
+    # MUSI być dokładnie "💬 Chat" (taka sama emotka i spacja jak w navbarze!)
+    st.session_state.active_page = "💬 Chat"
+
+    # Przygotowujemy prompt
+    prompt = f"Please provide a detailed betting analysis for the upcoming match between {match['home_team']} and {match['away_team']} in {match['competition']}."
+
+    # Dodajemy wiadomość do historii
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # Włączamy tryb generowania odpowiedzi
+    st.session_state.is_generating = True
+
+
 def render_match_card(match: dict):
     """Renders a visually appealing match card."""
-    
+
     # Parse date
     try:
         dt = datetime.strptime(match['date'], "%Y-%m-%d %H:%M UTC")
@@ -27,14 +44,12 @@ def render_match_card(match: dict):
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Analyze button
-    if st.button(f"📊 Analyze {match['home_team']} vs {match['away_team']}", key=f"btn_{match['id']}"):
-        st.session_state.analyze_match = match
-        st.session_state.active_tab = "Chat" # Force switch to chat (requires experimental rerun or manual click instruction)
-        
-        # Inject prompt into chat
-        prompt = f"Please provide a detailed betting analysis for the upcoming match between {match['home_team']} and {match['away_team']} in {match['competition']}."
-        
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        st.rerun()
+
+    # 2. Przycisk wywołujący funkcję callback
+    # Usuwamy "if" i st.rerun(), przekazujemy akcję prosto do on_click
+    st.button(
+        f"📊 Analyze {match['home_team']} vs {match['away_team']}",
+        key=f"btn_{match['id']}",
+        on_click=trigger_analysis_callback,
+        args=(match,)  # Przekazujemy słownik match jako argument do funkcji
+    )
