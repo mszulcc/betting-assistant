@@ -2,87 +2,105 @@ import streamlit as st
 
 
 def render_navbar():
-    """Renders the top navigation bar, disguised as tabs with global layout locks."""
+    """Renders the top navigation bar with fake tabs and dynamic full-height locked layout."""
     st.markdown("""
-            <style>
-            /* --- GLOBALNA BLOKADA EKRANU --- */
-            [data-testid="stAppViewContainer"] > .main {
-                overflow: hidden !important;
-                height: 100vh !important; /* <--- TO ZABIJA SKAKANIE: Wymusza 100% wysokości ekranu */
-            }
+        <style>
+        /* 1. CAŁKOWITA BLOKADA PRZEWIJANIA STRONY GŁÓWNEJ */
+        html, body, [data-testid="stAppViewContainer"], .main {
+            overflow: hidden !important;
+            height: 100vh !important;
+            margin: 0;
+            padding: 0;
+        }
 
-            html, body, [data-testid="stAppViewContainer"] {
-                scroll-behavior: auto !important; 
-            }
+        ::-webkit-scrollbar {
+            width: 0px !important;
+            background: transparent !important;
+        }
 
-            /* Odblokowanie miejsca dla paska czatu na dole */
-            .block-container {
-                padding-top: 1rem !important;
-                padding-bottom: 5rem !important; 
-            }
-            /* Zamiast chować cały header, chowamy tylko zbędne menu po prawej stronie */
-            #MainMenu {visibility: hidden;}
-            .stAppDeployButton {display: none;}
-            footer {visibility: hidden;}
-            
-            /* Robimy header przezroczystym, żeby nie zasłaniał naszej aplikacji, 
-               ale zostawiamy go widocznym dla przycisku sidebara! */
-            header {background-color: transparent !important;}
+        /* 2. ZABICIE "SLAJDÓW" (LAYOUT SHIFT) */
+        .block-container {
+            padding-top: 1.5rem !important;
+            padding-bottom: 6rem !important; /* Sztywna rezerwacja miejsca na input czatu */
+            max-height: 100vh !important;
+            overflow: hidden !important; 
+        }
 
-            /* --- MAGIA CSS: ZAKŁADKI --- */
-            div[role="radiogroup"] label > div:first-of-type { display: none !important; }
+        /* 3. DYNAMICZNE WYPEŁNIENIE EKRANU (NOWOŚĆ) */
+        /* Celujemy we wszystkie kontenery, którym Python nadał sztywną wysokość i zmuszamy je do rozciągnięcia */
+        [data-testid="stScrollableContainer"],
+        [data-testid="stVerticalBlockBorderWrapper"],
+        div[style*="height: 600px"] {
+            height: calc(100vh - 10.5rem) !important; /* Idealne dopasowanie: 100% ekranu minus marginesy */
+            max-height: none !important;
+        }
 
-            div[role="radiogroup"] {
-                display: flex;
-                flex-direction: row;
-                gap: 2rem;
-                border-bottom: 1px solid #e0e0e0; 
-                padding-bottom: 0 !important;
-            }
+        /* Ukrywanie menu Streamlita */
+        #MainMenu {visibility: hidden;}
+        .stAppDeployButton {display: none;}
+        footer {visibility: hidden;}
+        header {background-color: transparent !important;}
 
-            div[role="radiogroup"] label {
-                cursor: pointer;
-                padding-bottom: 0.5rem;
-                margin-bottom: -1px; 
-                border-bottom: 3px solid transparent; 
-                transition: all 0.2s ease-in-out;
-            }
+        /* --- MAGIA CSS: ZAKŁADKI --- */
+        div[role="radiogroup"] {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-end; /* Wymusza dociśnięcie wszystkich zakładek do dolnej krawędzi */
+            gap: 2rem;
+            border-bottom: 2px solid #e0e0e0; /* Solidna szara linia tła */
+            padding-bottom: 0 !important;
+            margin-bottom: 1.5rem; /* Margines oddzielający navbar od reszty strony */
+        }
 
-            div[role="radiogroup"] label:has(input:checked) {
-                border-bottom: 3px solid #FF4B4B !important; 
-            }
+        /* Ukrycie kółek radio */
+        div[role="radiogroup"] label > div:first-of-type { 
+            display: none !important; 
+        }
 
-            div[role="radiogroup"] label:has(input:checked) p {
-                font-weight: 600 !important;
-                color: #FF4B4B !important;
-            }
+        /* Główny kontener klikalny */
+        div[role="radiogroup"] label {
+            cursor: pointer;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 0.2rem 0.5rem 0.2rem !important; /* Równy odstęp tekstu od linii */
+            margin: 0 !important;
+            margin-bottom: -2px !important; /* Nachodzi idealnie na szarą linię (musi być równe border-bottom z góry!) */
+            border-bottom: 3px solid transparent !important; 
+            transition: border-color 0.2s ease-in-out;
+        }
 
-            div[role="radiogroup"] p {
-                margin: 0;
-                font-size: 1.1rem;
-            }
-            </style>
-        """, unsafe_allow_html=True)
+        /* Brutalne wyzerowanie ukrytych marginesów Streamlita wokół liter */
+        div[role="radiogroup"] label div, 
+        div[role="radiogroup"] label p {
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1 !important;
+        }
 
-    # ... (Twój zaawansowany CSS bez zmian)
+        /* Styl samego tekstu */
+        div[role="radiogroup"] p {
+            font-size: 1.1rem;
+            transition: color 0.2s ease-in-out;
+        }
+
+        /* Zaznaczona zakładka (Czerwona linia i pogrubienie) */
+        div[role="radiogroup"] label:has(input:checked) {
+            border-bottom: 3px solid #FF4B4B !important; 
+        }
+
+        div[role="radiogroup"] label:has(input:checked) p {
+            font-weight: 600 !important;
+            color: #FF4B4B !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
     options = ["💬 Chat", "⚽ Upcoming Matches", "📊 Standings", "📚 Knowledge Base"]
 
-    # 1. Poprawna inicjalizacja: robimy to TYLKO RAZ na samym początku uruchomienia aplikacji.
-    # Jeśli klucz już istnieje w sesji (bo np. przycisk Analyze go zmienił), to go NIE NADPISUJEMY.
     if "active_page" not in st.session_state:
         st.session_state.active_page = "💬 Chat"
 
-    # 2. Powiązanie z radiogroup poprzez parametr 'key'.
-    # Usunęliśmy przypisywanie zmiennej 'selected' z powrotem do st.radio.
-    # Streamlit sam zaktualizuje st.session_state.active_page po kliknięciu.
-    st.radio(
-        "Menu",
-        options,
-        horizontal=True,
-        label_visibility="collapsed",
-        key="active_page"  # To jest kluczowe!
-    )
+    st.radio("Menu", options, horizontal=True, label_visibility="collapsed", key="active_page")
 
-    # Zwracamy aktualną wartość prosto z sesji
     return st.session_state.active_page
